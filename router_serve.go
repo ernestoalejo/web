@@ -46,7 +46,9 @@ func (rootRouter *Router) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}()
 
 	next := middlewareStack(&closure)
-	next(&closure.AppResponseWriter, &closure.Request)
+	if err := next(&closure.AppResponseWriter, &closure.Request); err != nil {
+		panic(err)
+	}
 }
 
 // This function executes the middleware stack. It does so creating/returning an anonymous function/closure.
@@ -56,9 +58,9 @@ func (rootRouter *Router) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 // The route choosing middleware is executed after all root middleware. It picks the route.
 // The action invoking middleware is executed after all middleware. It executes the final handler.
 func middlewareStack(closure *middlewareClosure) NextMiddlewareFunc {
-	closure.Next = func(rw ResponseWriter, req *Request) {
+	closure.Next = func(rw ResponseWriter, req *Request) error {
 		if closure.currentRouterIndex >= len(closure.Routers) {
-			return
+			return nil
 		}
 
 		// Find middleware to invoke. The goal of this block is to set the middleware variable. If it can't be done, it will be nil.
@@ -82,7 +84,7 @@ func middlewareStack(closure *middlewareClosure) NextMiddlewareFunc {
 						rw.WriteHeader(http.StatusNotFound)
 						fmt.Fprintf(rw, DefaultNotFoundResponse)
 					}
-					return
+					return nil
 				}
 
 				closure.Routers = routersFor(route, closure.Routers)
@@ -122,6 +124,8 @@ func middlewareStack(closure *middlewareClosure) NextMiddlewareFunc {
 		if middleware != nil {
 			middleware.invoke(closure.Contexts[closure.currentRouterIndex], rw, req, closure.Next)
 		}
+
+		return nil
 	}
 
 	return closure.Next

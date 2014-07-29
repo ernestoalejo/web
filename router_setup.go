@@ -63,9 +63,9 @@ type actionHandler struct {
 	GenericHandler GenericHandler
 }
 
-type NextMiddlewareFunc func(ResponseWriter, *Request)
-type GenericMiddleware func(ResponseWriter, *Request, NextMiddlewareFunc)
-type GenericHandler func(ResponseWriter, *Request)
+type NextMiddlewareFunc func(ResponseWriter, *Request) error
+type GenericMiddleware func(ResponseWriter, *Request, NextMiddlewareFunc) error
+type GenericHandler func(ResponseWriter, *Request) error
 
 func New(ctx interface{}) *Router {
 	validateContext(ctx, nil)
@@ -115,7 +115,7 @@ func (r *Router) Middleware(fn interface{}) *Router {
 	vfn := reflect.ValueOf(fn)
 	validateMiddleware(vfn, r.contextType)
 	if vfn.Type().NumIn() == 3 {
-		r.middleware = append(r.middleware, &middlewareHandler{Generic: true, GenericMiddleware: fn.(func(ResponseWriter, *Request, NextMiddlewareFunc))})
+		r.middleware = append(r.middleware, &middlewareHandler{Generic: true, GenericMiddleware: fn.(func(ResponseWriter, *Request, NextMiddlewareFunc) error)})
 	} else {
 		r.middleware = append(r.middleware, &middlewareHandler{Generic: false, DynamicMiddleware: vfn})
 	}
@@ -167,7 +167,7 @@ func (r *Router) addRoute(method HttpMethod, path string, fn interface{}) *Route
 	fullPath := appendPath(r.pathPrefix, path)
 	route := &Route{Method: method, Path: fullPath, Router: r}
 	if vfn.Type().NumIn() == 2 {
-		route.Handler = &actionHandler{Generic: true, GenericHandler: fn.(func(ResponseWriter, *Request))}
+		route.Handler = &actionHandler{Generic: true, GenericHandler: fn.(func(ResponseWriter, *Request) error)}
 	} else {
 		route.Handler = &actionHandler{Generic: false, DynamicHandler: vfn}
 	}
@@ -264,7 +264,10 @@ func isValidHandler(vfn reflect.Value, ctxType reflect.Type, types ...reflect.Ty
 	numIn := fnType.NumIn()
 	numOut := fnType.NumOut()
 
-	if numOut != 0 {
+	if numOut != 1 {
+		return false
+	}
+	if fnType.Out(0) != reflect.TypeOf((*error)(nil)).Elem() {
 		return false
 	}
 
@@ -314,11 +317,11 @@ func instructiveMessage(vfn reflect.Value, addingType string, yourType string, a
 	str += "* Your " + yourType + " function can have one of these signatures:\n"
 	str += "*\n"
 	str += "* // If you don't need context:\n"
-	str += "* func YourFunctionName(" + args + ")\n"
+	str += "* func YourFunctionName(" + args + ") error\n"
 	str += "*\n"
 	str += "* // If you want your " + yourType + " to accept a context:\n"
-	str += "* func (c *" + ctxString + ") YourFunctionName(" + args + ")  // or,\n"
-	str += "* func YourFunctionName(c *" + ctxString + ", " + args + ")\n"
+	str += "* func (c *" + ctxString + ") YourFunctionName(" + args + ") error  // or,\n"
+	str += "* func YourFunctionName(c *" + ctxString + ", " + args + ") error\n"
 	str += "*\n"
 	str += "* Unfortunately, your function has this signature: " + vfn.Type().String() + "\n"
 	str += "*\n"

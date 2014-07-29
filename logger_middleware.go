@@ -5,10 +5,12 @@ import (
 	"time"
 )
 
-func LoggerMiddleware(rw ResponseWriter, req *Request, next NextMiddlewareFunc) {
+func LoggerMiddleware(rw ResponseWriter, req *Request, next NextMiddlewareFunc) error {
 	startTime := time.Now()
 
-	next(rw, req)
+	if err := next(rw, req); err != nil {
+		return err
+	}
 
 	duration := time.Since(startTime).Nanoseconds()
 	var durationUnits string
@@ -24,4 +26,5 @@ func LoggerMiddleware(rw ResponseWriter, req *Request, next NextMiddlewareFunc) 
 	}
 
 	fmt.Printf("[%d %s] %d '%s'\n", duration, durationUnits, rw.StatusCode(), req.URL.Path)
+	return nil
 }
