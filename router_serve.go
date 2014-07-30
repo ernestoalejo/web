@@ -111,9 +111,14 @@ func middlewareStack(closure *middlewareClosure) NextMiddlewareFunc {
 				// We're done! invoke the action
 				handler := req.route.Handler
 				if handler.Generic {
-					handler.GenericHandler(rw, req)
+					return handler.GenericHandler(rw, req)
 				} else {
-					handler.DynamicHandler.Call([]reflect.Value{closure.Contexts[len(closure.Contexts)-1], reflect.ValueOf(rw), reflect.ValueOf(req)})
+					result := handler.DynamicHandler.Call([]reflect.Value{closure.Contexts[len(closure.Contexts)-1], reflect.ValueOf(rw), reflect.ValueOf(req)})[0].Interface()
+					if result != nil {
+						return result.(error)
+					}
+
+					return nil
 				}
 			}
 		}
@@ -122,7 +127,9 @@ func middlewareStack(closure *middlewareClosure) NextMiddlewareFunc {
 
 		// Invoke middleware.
 		if middleware != nil {
-			middleware.invoke(closure.Contexts[closure.currentRouterIndex], rw, req, closure.Next)
+			if err := middleware.invoke(closure.Contexts[closure.currentRouterIndex], rw, req, closure.Next); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -131,11 +138,16 @@ func middlewareStack(closure *middlewareClosure) NextMiddlewareFunc {
 	return closure.Next
 }
 
-func (mw *middlewareHandler) invoke(ctx reflect.Value, rw ResponseWriter, req *Request, next NextMiddlewareFunc) {
+func (mw *middlewareHandler) invoke(ctx reflect.Value, rw ResponseWriter, req *Request, next NextMiddlewareFunc) error {
 	if mw.Generic {
-		mw.GenericMiddleware(rw, req, next)
+	  return mw.GenericMiddleware(rw, req, next)
 	} else {
-		mw.DynamicMiddleware.Call([]reflect.Value{ctx, reflect.ValueOf(rw), reflect.ValueOf(req), reflect.ValueOf(next)})
+		result := mw.DynamicMiddleware.Call([]reflect.Value{ctx, reflect.ValueOf(rw), reflect.ValueOf(req), reflect.ValueOf(next)})[0].Interface()
+		if result != nil {
+			return result.(error)
+		}
+
+		return nil
 	}
 }
 
