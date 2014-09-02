@@ -11,7 +11,7 @@ import (
 func StaticMiddleware(path string) func(ResponseWriter, *Request, NextMiddlewareFunc) error {
 	dir := http.Dir(path)
 	return func(w ResponseWriter, req *Request, next NextMiddlewareFunc) error {
-		file := strings.TrimPrefix(path, req.URL.Path)
+		file := strings.TrimPrefix(req.URL.Path, "/"+path)
 
 		f, err := dir.Open(file)
 		if err != nil {
